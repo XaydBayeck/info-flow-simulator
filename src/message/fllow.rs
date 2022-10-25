@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::display::cell::{Cell, Coordinate};
+use crate::display::cell::{distance, Cell, Coordinate, Neighbors};
 
 use super::Message;
 
@@ -34,12 +34,35 @@ pub fn receive_message(
     }
 }
 
-pub fn send_message(mut ev_deliver: EventWriter<Deliver>, cells: Query<(&Cell, &Coordinate)>) {
+pub fn send_message(
+    mut ev_deliver: EventWriter<Deliver>,
+    cells: Query<(&Cell, &Coordinate, &Neighbors)>,
+) {
     let mut rng = rand::thread_rng();
 
-    for (cell, &coor) in cells.iter() {
+    for (cell, &coor, neighbors) in cells.iter() {
         if let Some(msg) = cell.acc_message.clone() {
-            if rng.gen::<f32>() < msg.spread_benefits() {
+            let len = neighbors.0.len() as f32;
+            let knowned = neighbors.0.iter().fold(0, |acc, id| {
+                cells
+                    .get(id.clone())
+                    .map(|(cell_n, _, _)| {
+                        if {
+                            match &cell_n.acc_message {
+                                None => false,
+                                Some(x) => (|msg_n: &Message| msg_n.face == msg.face)(x),
+                            }
+                        } {
+                            acc
+                        } else {
+                            acc + 1
+                        }
+                    })
+                    .or::<()>(Ok(acc))
+                    .unwrap()
+            }) as f32;
+
+            if rng.gen::<f32>() < msg.spread_benefits() * knowned / len {
                 ev_deliver.send(Deliver {
                     sender_coor: coor,
                     message: msg,
@@ -47,16 +70,4 @@ pub fn send_message(mut ev_deliver: EventWriter<Deliver>, cells: Query<(&Cell, &
             }
         }
     }
-}
-
-fn distance(lhs: &Coordinate, rhs: &Coordinate) -> usize {
-    fn abs_sub(lhs: usize, rhs: usize) -> usize {
-        if lhs > rhs {
-            lhs - rhs
-        } else {
-            rhs - lhs
-        }
-    }
-
-    abs_sub(lhs.0, rhs.0) + abs_sub(lhs.1, rhs.1)
 }

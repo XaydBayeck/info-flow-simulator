@@ -28,7 +28,7 @@ impl Plugin for MessagePlugin {
             .add_system_set(
                 SystemSet::new()
                     .label(fllow::FllowLable::Send)
-                    .with_run_criteria(FixedTimestep::step(TIME_STEP * 20.))
+                    .with_run_criteria(FixedTimestep::step(TIME_STEP * 5.))
                     .with_system(fllow::send_message),
             );
     }

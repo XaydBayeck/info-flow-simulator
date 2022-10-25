@@ -11,6 +11,9 @@ pub struct Cell {
 }
 
 #[derive(Component)]
+pub struct Neighbors(pub Vec<Entity>);
+
+#[derive(Component)]
 pub struct Cells;
 
 #[derive(Component, PartialEq, Eq, Clone, Copy)]
@@ -47,18 +50,47 @@ impl CellBundle {
 }
 
 pub fn setup_map(mut commands: Commands, world_size: Res<WorldSize>) {
+    let (cols, rows) = (world_size.col(), world_size.row());
+
+    let cells = (0..(rows * cols))
+        .map(|idx| {
+            let (col, row) = (idx / rows, idx % rows);
+            (
+                commands
+                    .spawn_bundle(CellBundle::new(CELL_SIZE, col, row))
+                    .id(),
+                Coordinate(col, row),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let cells = cells.clone().into_iter().map(|(cell, coor)| {
+        let neighbors = cells
+            .iter()
+            .filter(|(_, coorn)| distance(&coor, coorn) < 3)
+            .map(|(id, _)| id.clone())
+            .collect();
+        commands.entity(cell).insert(Neighbors(neighbors)).id()
+    }).collect::<Vec<_>>();
+
     commands
         .spawn_bundle(SpatialBundle::from_transform(Transform::from_xyz(
-            -(CELL_SIZE * world_size.col() as f32) / 2.,
-            -(CELL_SIZE * world_size.row() as f32) / 2.,
+            -(CELL_SIZE * cols as f32) / 2.,
+            -(CELL_SIZE * rows as f32) / 2.,
             0.,
         )))
         .insert(Cells)
-        .with_children(|parent| {
-            for row in 0..=world_size.row() {
-                for col in 0..=world_size.col() {
-                    parent.spawn_bundle(CellBundle::new(CELL_SIZE, col, row));
-                }
-            }
-        });
+        .push_children(&cells);
+}
+
+pub fn distance(lhs: &Coordinate, rhs: &Coordinate) -> usize {
+    fn abs_sub(lhs: usize, rhs: usize) -> usize {
+        if lhs > rhs {
+            lhs - rhs
+        } else {
+            rhs - lhs
+        }
+    }
+
+    abs_sub(lhs.0, rhs.0) + abs_sub(lhs.1, rhs.1)
 }
