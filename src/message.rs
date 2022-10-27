@@ -1,60 +1,68 @@
 use bevy::prelude::*;
-use bevy::time::FixedTimestep;
 
-mod fllow;
-
-use crate::{display::cell::Cell, CELL_SIZE, TIME_STEP};
+use crate::{cell::Individual, CELL_SIZE, MAX_EVALUATE_TIMES};
 
 pub struct MessagePlugin;
 
 impl Plugin for MessagePlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         let test_message = Message {
-            correlation: 0.7,
-            readability: 0.8,
-            benefits: 0.4,
-            reliability: 0.2,
+            correlation: 0.6,
+            readability: 0.6,
+            ambiguity: 0.8,
+            rationality: 0.4,
+            interesting: 0.6,
+            explainability: 0.6,
             face: Color::BLACK,
         };
 
         app.insert_resource(test_message)
-            .add_event::<fllow::Deliver>()
-            .add_system(cursor_change_cell_color)
-            .add_system_set(
-                SystemSet::new()
-                    .label(fllow::FllowLable::Receive)
-                    .with_system(fllow::receive_message),
-            )
-            .add_system_set(
-                SystemSet::new()
-                    .label(fllow::FllowLable::Send)
-                    .with_run_criteria(FixedTimestep::step(TIME_STEP * 5.))
-                    .with_system(fllow::send_message),
-            );
+            .add_system(cursor_change_cell_color);
     }
 }
 
 /// 在人群之间传播的信息
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect, Default)]
 pub struct Message {
     /// 相关性
     pub correlation: f32,
     /// 易读性
     pub readability: f32,
-    /// 传播收益
-    pub benefits: f32,
-    /// 可靠性
-    pub reliability: f32,
+    /// 模糊性
+    pub ambiguity: f32,
+    /// 合理性
+    pub rationality: f32,
+    /// 趣味性
+    pub interesting: f32,
+    /// 可解释性
+    pub explainability: f32,
     pub face: Color,
 }
 
 impl Message {
     pub fn accept_ratio(&self) -> f32 {
-        (self.correlation + self.readability + self.reliability) / 3.
+        const W: [f32; 4] = [0.22, 0.603, 0.11, 0.067];
+        let es = [
+            self.correlation,
+            self.readability,
+            self.rationality,
+            self.interesting,
+        ];
+
+        es.into_iter()
+            .zip(W.into_iter())
+            .map(|(pe, w)| pe * w)
+            .sum()
     }
 
-    pub fn spread_benefits(&self) -> f32 {
-        self.benefits
+    pub fn evaluate_times(&self) -> usize {
+        (self.correlation * MAX_EVALUATE_TIMES as f32 + 0.5).floor() as usize
+    }
+}
+
+impl PartialEq for Message {
+    fn eq(&self, other: &Self) -> bool {
+        self.face.eq(&other.face)
     }
 }
 
@@ -63,7 +71,7 @@ fn cursor_change_cell_color(
     message: Res<Message>,
     buttons: Res<Input<MouseButton>>,
     q_camera: Query<(&Camera, &GlobalTransform)>,
-    mut cells: Query<(&mut Sprite, &mut Cell, &GlobalTransform)>,
+    mut cells: Query<(&mut Individual, &GlobalTransform)>,
 ) {
     if buttons.pressed(MouseButton::Left) {
         let (camera, camera_transform) = q_camera.single();
@@ -90,13 +98,13 @@ fn cursor_change_cell_color(
 
             cells
                 .iter_mut()
-                .filter(|(_, _, &trans)| {
+                .filter(|(_, &trans)| {
                     let cell_pos = trans.translation().truncate();
                     cell_pos.distance(world_pos) <= CELL_SIZE / 2.
                 })
-                .for_each(|(mut sprite, mut cell, _)| {
-                    sprite.color = message.face;
-                    cell.acc_message = Some(message.to_owned());
+                .for_each(|(mut cell, _)| {
+                    // sprite.color = message.face;
+                    cell.infect(message.to_owned());
                 });
         }
     }

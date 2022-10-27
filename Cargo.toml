@@ -17,9 +17,12 @@ lto = true
 codegen-units = 1
 
 [features]
-default = ["dev"]
+default = ["dev", "debug"]
 dev = [
   "bevy/dynamic",
+]
+debug = [
+  "dep:bevy-inspector-egui",
 ]
 
 [dependencies]
@@ -27,3 +30,6 @@ bevy = "0.8"
 # 避免编译错误
 alsa = "=0.6.0"
 rand = "0.8.5"
+bevy_life = { version = "0.5", features = [ "auto-coloring" ]}
+
+bevy-inspector-egui = { version = "0.13", optional = true }
